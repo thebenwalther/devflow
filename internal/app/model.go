@@ -66,7 +66,7 @@ func (m *Model) Init() tea.Cmd {
 	return func() tea.Msg {
 		projects := project.DiscoverProjects()
 		return project.ProjectsLoadedMsg{Projects: projects}
-	}()
+	}
 }
 
 // Update handles application updates and messages

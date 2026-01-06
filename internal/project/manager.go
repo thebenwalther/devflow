@@ -62,67 +62,6 @@ func New() *Model {
 	}
 }
 
-// DiscoverProjects scans common directories for projects
-func DiscoverProjects() []Project {
-	var allProjects []Project
-
-	// Search paths to scan
-	searchPaths := []string{
-		".",
-		"~/dev",
-		"~/Projects",
-		"~/code",
-		"~/workspace",
-	}
-
-	for _, searchPath := range searchPaths {
-		// Expand ~ to home directory
-		expandedPath := os.ExpandEnv(searchPath)
-
-		// Check if path exists
-		if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
-			continue
-		}
-
-		// Walk through directory
-		filepath.WalkDir(expandedPath, func(path string, d os.DirEntry, err error) error {
-			if err != nil {
-				return nil
-			}
-
-			// Skip hidden directories and common non-project directories
-			if strings.HasPrefix(d.Name(), ".") ||
-				d.Name() == "node_modules" ||
-				d.Name() == "target" ||
-				d.Name() == "build" ||
-				d.Name() == "dist" {
-				return nil
-			}
-
-			// Only check directories
-			if !d.IsDir() {
-				return nil
-			}
-
-			// Don't go too deep
-			depth := strings.Count(path, string(filepath.Separator))
-			if depth > 3 {
-				return nil
-			}
-
-			// Check if this looks like a project
-			if detectProjectType(path) != UnknownType {
-				project := getProjectInfo(path)
-				allProjects = append(allProjects, project)
-			}
-
-			return nil
-		})
-	}
-
-	return allProjects
-}
-
 // detectProjectType determines what type of project this is
 func detectProjectType(path string) ProjectType {
 	info, err := os.Stat(path)
@@ -198,7 +137,7 @@ func getLanguageFromType(projectType ProjectType) string {
 	}
 }
 
-// getIconForType returns an icon for the project type
+// getIconForType returns an icon for project type
 func getIconForType(projectType ProjectType) string {
 	switch projectType {
 	case NodeJS:
@@ -232,8 +171,8 @@ func getProjectInfo(path string) Project {
 
 	// Count files (simplified)
 	fileCount := 0
-	files, _ = os.ReadDir(path)
-	for _, file := range files {
+	projectFiles, _ := os.ReadDir(path)
+	for _, file := range projectFiles {
 		if !file.IsDir() {
 			fileCount++
 		}
@@ -264,6 +203,67 @@ func getProjectInfo(path string) Project {
 		Modified: modified,
 		Files:    fileCount,
 	}
+}
+
+// DiscoverProjects scans common directories for projects
+func DiscoverProjects() []Project {
+	var allProjects []Project
+
+	// Search paths to scan
+	searchPaths := []string{
+		".",
+		"~/dev",
+		"~/Projects",
+		"~/code",
+		"~/workspace",
+	}
+
+	for _, searchPath := range searchPaths {
+		// Expand ~ to home directory
+		expandedPath := os.ExpandEnv(searchPath)
+
+		// Check if path exists
+		if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
+			continue
+		}
+
+		// Walk through directory
+		filepath.WalkDir(expandedPath, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+
+			// Skip hidden directories and common non-project directories
+			if strings.HasPrefix(d.Name(), ".") ||
+				d.Name() == "node_modules" ||
+				d.Name() == "target" ||
+				d.Name() == "build" ||
+				d.Name() == "dist" {
+				return nil
+			}
+
+			// Only check directories
+			if !d.IsDir() {
+				return nil
+			}
+
+			// Don't go too deep
+			depth := strings.Count(path, string(filepath.Separator))
+			if depth > 3 {
+				return nil
+			}
+
+			// Check if this looks like a project
+			if detectProjectType(path) != UnknownType {
+				project := getProjectInfo(path)
+				allProjects = append(allProjects, project)
+			}
+
+			return nil
+		})
+	}
+
+	return allProjects
 }
 
 // Update handles updates to the project model
@@ -307,6 +307,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 			m.cursor = 0
 			m.selected = 0
 		}
+
 	}
 
 	return nil
