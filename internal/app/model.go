@@ -63,12 +63,10 @@ func New() *Model {
 // Init initializes the application
 func (m *Model) Init() tea.Cmd {
 	// Start project discovery
-	return tea.Sequence(
-		func() tea.Msg {
-			projects := project.DiscoverProjects()
-			return project.ProjectsLoadedMsg{Projects: projects}
-		}(),
-	)
+	return func() tea.Msg {
+		projects := project.DiscoverProjects()
+		return project.ProjectsLoadedMsg{Projects: projects}
+	}()
 }
 
 // Update handles application updates and messages
