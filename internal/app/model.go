@@ -4,6 +4,7 @@ package app
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/thebenwalther/devflow/internal/project"
 	"github.com/thebenwalther/devflow/internal/ui/styles"
 )
 
@@ -36,6 +37,9 @@ type Model struct {
 
 	// Frame counter for animations
 	frameCount int
+
+	// Project management integration
+	projectManager *project.Model
 }
 
 // New creates a new application model with initial state
@@ -44,18 +48,27 @@ func New() *Model {
 		currentTab: "projects",
 		focused:    ProjectsFocus,
 
-		projectsContent: "📁 Projects\n\nComing soon: project discovery and management",
+		projectsContent: "📁 Projects\n\nReady to discover your development projects!",
 		gitContent:      "🔀 Git\n\nComing soon: git status and operations",
 		buildContent:    "🔨 Build\n\nComing soon: build monitoring",
 		tasksContent:    "📋 Tasks\n\nComing soon: task management",
 
 		frameCount: 0,
+
+		// Initialize project manager
+		projectManager: project.New(),
 	}
 }
 
 // Init initializes the application
 func (m *Model) Init() tea.Cmd {
-	return nil
+	// Start project discovery
+	return tea.Sequence(
+		func() tea.Msg {
+			projects := project.DiscoverProjects()
+			return project.ProjectsLoadedMsg{Projects: projects}
+		}(),
+	)
 }
 
 // Update handles application updates and messages
@@ -90,6 +103,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentTab = "tasks"
 			m.focused = TasksFocus
 		}
+
+	case project.ProjectsLoadedMsg:
+		m.projectManager.Update(msg)
 
 	case tea.QuitMsg:
 		return m, nil
@@ -183,7 +199,7 @@ func (m *Model) renderContent() string {
 
 	switch m.currentTab {
 	case "projects":
-		content = styles.Content.Render(m.projectsContent)
+		content = m.projectManager.View()
 	case "git":
 		content = styles.Content.Render(m.gitContent)
 	case "build":
@@ -195,7 +211,7 @@ func (m *Model) renderContent() string {
 	}
 
 	// Add help hint at the bottom
-	help := styles.Help.Render("Tab: Switch | 1-4: Select Tab | q: Quit")
+	help := styles.Help.Render("Tab: Switch | 1-4: Select Tab | ↑↓: Navigate | Enter: Select | r: Refresh")
 	contentWithHelp := lipgloss.JoinVertical(
 		lipgloss.Top,
 		content,
