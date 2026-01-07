@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -21,23 +20,8 @@ type Project struct {
 	Type     string
 	Git      bool
 	Status   string
-	Modified time.Time
 	Files    int
 }
-
-// ProjectType represents different project types we can detect
-type ProjectType int
-
-const (
-	UnknownType ProjectType = iota
-	NodeJS
-	Go
-	Rust
-	Python
-	Cargo // Rust project
-	Makefile
-	GitRepo
-)
 
 // Model holds the state for project management
 type Model struct {
@@ -61,6 +45,89 @@ func New() *Model {
 		height:   24,
 	}
 }
+
+// LoadProjects loads projects from common directories
+func (m *Model) LoadProjects() tea.Cmd {
+	return func() tea.Msg {
+		projects := DiscoverProjects()
+		return ProjectsLoadedMsg{Projects: projects}
+	}
+}
+
+// DiscoverProjects scans common directories for projects
+func DiscoverProjects() []Project {
+	var allProjects []Project
+
+	// Search paths to scan
+	searchPaths := []string{
+		".",
+		"~/dev",
+		"~/Projects",
+		"~/code",
+		"~/workspace",
+	}
+
+	for _, searchPath := range searchPaths {
+		// Expand ~ to home directory
+		expandedPath := os.ExpandEnv(searchPath)
+
+		// Check if path exists
+		if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
+			continue
+		}
+
+		// Walk the directory
+		filepath.WalkDir(expandedPath, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+
+			// Skip hidden directories and common non-project directories
+			if strings.HasPrefix(d.Name(), ".") ||
+				d.Name() == "node_modules" ||
+				d.Name() == "target" ||
+				d.Name() == "build" ||
+				d.Name() == "dist" {
+				return nil
+			}
+
+			// Only check directories
+			if !d.IsDir() {
+				return nil
+			}
+
+			// Don't go too deep
+			depth := strings.Count(path, string(filepath.Separator))
+			if depth > 3 {
+				return nil
+			}
+
+			// Check if this looks like a project
+			if detectProjectType(path) != UnknownType {
+				project := getProjectInfo(path)
+				allProjects = append(allProjects, project)
+			}
+
+			return nil
+		})
+	}
+
+	return allProjects
+}
+
+// ProjectType represents different project types we can detect
+type ProjectType int
+
+const (
+	UnknownType ProjectType = iota
+	NodeJS
+	Go
+	Rust
+	Python
+	Cargo
+	Makefile
+	GitRepo
+)
 
 // detectProjectType determines what type of project this is
 func detectProjectType(path string) ProjectType {
@@ -162,13 +229,6 @@ func getProjectInfo(path string) Project {
 	projectType := detectProjectType(path)
 	name := filepath.Base(path)
 
-	// Get modified time
-	info, err := os.Stat(path)
-	var modified time.Time
-	if err == nil {
-		modified = info.ModTime()
-	}
-
 	// Count files (simplified)
 	fileCount := 0
 	projectFiles, _ := os.ReadDir(path)
@@ -200,70 +260,8 @@ func getProjectInfo(path string) Project {
 		Type:     getLanguageFromType(projectType),
 		Git:      hasGit,
 		Status:   status,
-		Modified: modified,
 		Files:    fileCount,
 	}
-}
-
-// DiscoverProjects scans common directories for projects
-func DiscoverProjects() []Project {
-	var allProjects []Project
-
-	// Search paths to scan
-	searchPaths := []string{
-		".",
-		"~/dev",
-		"~/Projects",
-		"~/code",
-		"~/workspace",
-	}
-
-	for _, searchPath := range searchPaths {
-		// Expand ~ to home directory
-		expandedPath := os.ExpandEnv(searchPath)
-
-		// Check if path exists
-		if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
-			continue
-		}
-
-		// Walk through directory
-		filepath.WalkDir(expandedPath, func(path string, d os.DirEntry, err error) error {
-			if err != nil {
-				return nil
-			}
-
-			// Skip hidden directories and common non-project directories
-			if strings.HasPrefix(d.Name(), ".") ||
-				d.Name() == "node_modules" ||
-				d.Name() == "target" ||
-				d.Name() == "build" ||
-				d.Name() == "dist" {
-				return nil
-			}
-
-			// Only check directories
-			if !d.IsDir() {
-				return nil
-			}
-
-			// Don't go too deep
-			depth := strings.Count(path, string(filepath.Separator))
-			if depth > 3 {
-				return nil
-			}
-
-			// Check if this looks like a project
-			if detectProjectType(path) != UnknownType {
-				project := getProjectInfo(path)
-				allProjects = append(allProjects, project)
-			}
-
-			return nil
-		})
-	}
-
-	return allProjects
 }
 
 // Update handles updates to the project model
@@ -307,7 +305,6 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 			m.cursor = 0
 			m.selected = 0
 		}
-
 	}
 
 	return nil

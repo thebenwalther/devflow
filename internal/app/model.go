@@ -8,7 +8,7 @@ import (
 	"github.com/thebenwalther/devflow/internal/ui/styles"
 )
 
-// FocusArea represents which area of the UI is currently focused
+// FocusArea represents which area of UI is currently focused
 type FocusArea int
 
 const (
@@ -20,14 +20,14 @@ const (
 
 // Model represents the main application state
 type Model struct {
-	// Navigation state
 	currentTab string
 	focused    FocusArea
-
-	// Application state
 	dimensions tea.WindowSizeMsg
 	quitting   bool
 	err        error
+
+	// Frame counter for animations
+	frameCount int
 
 	// Content for each tab
 	projectsContent string
@@ -35,20 +35,17 @@ type Model struct {
 	buildContent    string
 	tasksContent    string
 
-	// Frame counter for animations
-	frameCount int
-
 	// Project management integration
 	projectManager *project.Model
 }
 
-// New creates a new application model with initial state
+// New creates a new application model
 func New() *Model {
 	return &Model{
 		currentTab: "projects",
 		focused:    ProjectsFocus,
 
-		projectsContent: "📁 Projects\n\nReady to discover your development projects!",
+		projectsContent: "📁 Projects\n\nLoading project discovery...",
 		gitContent:      "🔀 Git\n\nComing soon: git status and operations",
 		buildContent:    "🔨 Build\n\nComing soon: build monitoring",
 		tasksContent:    "📋 Tasks\n\nComing soon: task management",
@@ -62,11 +59,7 @@ func New() *Model {
 
 // Init initializes the application
 func (m *Model) Init() tea.Cmd {
-	// Start project discovery
-	return func() tea.Msg {
-		projects := project.DiscoverProjects()
-		return project.ProjectsLoadedMsg{Projects: projects}
-	}
+	return m.projectManager.LoadProjects()
 }
 
 // Update handles application updates and messages
@@ -102,8 +95,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.focused = TasksFocus
 		}
 
+	// Handle project manager messages
 	case project.ProjectsLoadedMsg:
+		m.projectsContent = "📁 Projects\n\nProject discovery complete!"
 		m.projectManager.Update(msg)
+
+	case project.ProjectSelectedMsg:
+		// Handle project selection
+		return m, nil
 
 	case tea.QuitMsg:
 		return m, nil
@@ -211,7 +210,7 @@ func (m *Model) renderContent() string {
 	// Add help hint at the bottom
 	help := styles.Help.Render("Tab: Switch | 1-4: Select Tab | ↑↓: Navigate | Enter: Select | r: Refresh")
 	contentWithHelp := lipgloss.JoinVertical(
-		lipgloss.Top,
+		lipgloss.Left,
 		content,
 		"",
 		help,
